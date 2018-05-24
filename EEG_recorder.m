@@ -151,6 +151,8 @@ end
 
 
 function start_recording_Callback(hObject, eventdata, handles)
+fprintf('Resetting instruments...\n');
+instrreset;
 fprintf('\n')
 set(handles.start_recording, 'Enable','off')
 set(handles.clear, 'Enable','off')
@@ -303,6 +305,84 @@ catch ME
     rethrow(ME)
 end
 
+%% Init Arduino Serial
+try
+    fprintf('Searching for Serial Comm (arduino)...\n');
+    % Arduino
+    global arduino
+    arduino = struct;
+    arduino.working = 0;
+    arduino.fs = 256;
+    arduino.hw = instrhwinfo('serial');
+    
+    % Set channels
+    arduino.channels = [];
+    for i=1:6
+        if eval(['handles.A' num2str(i) '.Value'])
+            arduino.channels = [arduino.channels i];
+        end
+    end
+    
+    if ~isempty(arduino.hw) && ~isempty(arduino.channels)
+        % Setup connection
+        for objCons=hw.ObjectConstructorName'
+            fprintf('Constructing %s...\n', objCons{1});
+            arduino.s = eval(objCons{1});
+            
+            % Comm settings (No Touchy)
+            arduino.s.BaudRate = 115200;
+            arduino.s.Parity = 'None';
+            arduino.s.InputBufferSize = arduino.fs * 10; % 10sec buffer
+            
+            % Record settings (No Touchy)
+            arduino.s.BytesAvailableFcnMode = 'byte';
+            arduino.s.BytesAvailableFcnCount = 64;
+            arduino.s.Terminator = 'CR/LF';
+            arduino.s.BytesAvailableFcn = @ArduinoRecorder;
+            
+            % Open comm
+            fprintf('Opening Comm...\n');
+            fopen(s);
+            
+            % Check if it is the arduino recorder
+            success = 0;
+            for i=1:2
+                fwrite(s, 0);
+                res = s.fgetl();
+                if strcmp(res, 'ArduinoRecorder')
+                    fwrite(s, 'o');
+                    success = 1;
+                    break;
+                end
+            end
+            
+            if success
+                fprintf('Found ArduinoRecorder!\n');
+                break;
+            end
+        end
+        
+        if success
+            % Setup data
+            arduino.data = [];
+
+
+            % Start reading
+            arduino.s.ReadAsyncMode = 'continuous';
+
+            % Set working
+            arduino.working = 1;
+        end
+    end
+
+catch e
+    delete(handles.wb);
+    errordlg(sprintf('Failed to initialize arduino: %s', e.message));
+    rethrow(e);
+end
+
+
+%% Record
 try
     waitbar(.8,handles.wb,'ready to start recording');
     fprintf('---------------------------------Start-------------------------------------\n')
@@ -340,7 +420,7 @@ while ai.SamplesAcquired < dur_aq * Fs  && manualstop == 0
         %         set(handles.axes1, 'Ylim', [min(b)-0.001  max(b)+.001])
     end
     grid(handles.axes1,'on');
-    drawnow; hold(handles.axes1,'off');
+    drawnow limitrate; hold(handles.axes1,'off');
     %     end
     
     minfreq = str2double(get(handles.minfreq, 'String'));
@@ -363,8 +443,13 @@ while ai.SamplesAcquired < dur_aq * Fs  && manualstop == 0
         end
     end
     
-    drawnow; hold(handles.axes2,'off');
+    drawnow limitrate; hold(handles.axes2,'off');
 end
+
+% Stop arduino
+arduino.s.stopasync();
+fclose(arduino.s);
+instrreset; %Reset instruments
 
 if manualstop == 0
     stop(ai);
@@ -630,3 +715,57 @@ function Info_Callback(hObject, eventdata, handles)
 % hObject    handle to Info (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in A1.
+function A1_Callback(hObject, eventdata, handles)
+% hObject    handle to A1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of A1
+
+
+% --- Executes on button press in A2.
+function A2_Callback(hObject, eventdata, handles)
+% hObject    handle to A2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of A2
+
+
+% --- Executes on button press in A3.
+function A3_Callback(hObject, eventdata, handles)
+% hObject    handle to A3 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of A3
+
+
+% --- Executes on button press in A4.
+function A4_Callback(hObject, eventdata, handles)
+% hObject    handle to A4 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of A4
+
+
+% --- Executes on button press in A5.
+function A5_Callback(hObject, eventdata, handles)
+% hObject    handle to A5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of A5
+
+
+% --- Executes on button press in Digital.
+function Digital_Callback(hObject, eventdata, handles)
+% hObject    handle to Digital (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of Digital
